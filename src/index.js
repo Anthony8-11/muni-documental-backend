@@ -18,6 +18,7 @@ const cors = require('cors');
 const documentRoutes = require('./api/routes/documentRoutes');
 const authRoutes = require('./api/routes/authRoutes');
 const searchRoutes = require('./api/routes/searchRoutes');
+const datesRoutes = require('./api/routes/datesRoutes');
 
 // --- Configuración Inicial ---
 const app = express();
@@ -54,6 +55,7 @@ app.get('/health', (req, res) => {
 app.use('/api/documents', documentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/search', searchRoutes);
+app.use('/api/dates', datesRoutes);
 
 // --- Ruta de Prueba ---
 app.get('/', (req, res) => {
