@@ -67,7 +67,7 @@ async function search(query) {
     try {
       let found = null;
 
-      // If source provides an id-like value, try direct lookup by id
+      // Strategy 1: If source provides an id-like value, try direct lookup by id
       if (src.id) {
         const { data: doc, error: docErr } = await supabase
           .from('documents')
@@ -77,8 +77,28 @@ async function search(query) {
         if (!docErr && doc) found = doc;
       }
 
-      // If not found and we have a name, try exact or partial match by file_name
-      if (!found && src.name) {
+      // Strategy 2: Try to find document by searching in chunks table first
+      if (!found && src.id) {
+        // Look for chunks that reference this document ID
+        const { data: chunks, error: chunksErr } = await supabase
+          .from('document_chunks')
+          .select('document_id')
+          .eq('id', src.id)
+          .maybeSingle();
+        
+        if (!chunksErr && chunks && chunks.document_id) {
+          // Now get the actual document
+          const { data: doc, error: docErr } = await supabase
+            .from('documents')
+            .select('id, file_name, storage_path')
+            .eq('id', chunks.document_id)
+            .maybeSingle();
+          if (!docErr && doc) found = doc;
+        }
+      }
+
+      // Strategy 3: If not found and we have a name, try exact or partial match by file_name
+      if (!found && src.name && src.name !== 'Documento desconocido') {
         // Try exact match
         const { data: exact, error: exactErr } = await supabase
           .from('documents')
@@ -103,6 +123,7 @@ async function search(query) {
         src.id = found.id;
         src.name = found.file_name; // Always use DB file_name, not fallback
         src.storage_path = found.storage_path || null;
+        console.log(`✅ Found document: ${found.file_name} for source ID: ${src.id}`);
 
         // Try to obtain a public URL if possible
         try {
@@ -113,14 +134,16 @@ async function search(query) {
         } catch (e) {
           // ignore storage errors; we still return the normalized id/name
         }
-      }
-
-      // If no document found in DB, but we have a name from chunk, use it
-      if (!found && src.name && src.name !== 'Documento desconocido') {
-        // Keep the name from chunk metadata if available
-      } else if (!found) {
-        // Last fallback if no name available anywhere
-        src.name = `Documento ${src.id || 'sin identificar'}`;
+      } else {
+        console.log(`❌ No document found for source ID: ${src.id}, name: ${src.name}`);
+        
+        // If no document found in DB, but we have a name from chunk, use it
+        if (src.name && src.name !== 'Documento desconocido') {
+          // Keep the name from chunk metadata if available
+        } else {
+          // Last fallback if no name available anywhere
+          src.name = `Documento ${src.id || 'sin identificar'}`;
+        }
       }
 
       return src;
