@@ -10,19 +10,28 @@ async function search(query) {
   const embedResult = await embeddingModel.embedContent(query);
   const queryVector = embedResult.embedding.values;
 
-  // 2. Retrieve-Context (chunks should contain at least `content` and some document identifiers/metadata)
+  // 2. Retrieve-Context with improved filtering for better relevance
   const { data: chunks, error } = await supabase.rpc('match_documents', {
     query_embedding: queryVector,
-    match_threshold: 0.5,
-    match_count: 5
+    match_threshold: 0.7, // Increased threshold for better relevance
+    match_count: 3 // Reduced count to get only most relevant chunks
   });
 
   if (error) {
     throw new Error(`Error retrieving context: ${error.message}`);
   }
 
-  // 3. Build-Prompt
-  const contextText = (chunks || []).map(chunk => chunk.content).join('\n');
+  // Additional filtering: only keep chunks with good similarity scores
+  const relevantChunks = (chunks || []).filter(chunk => {
+    const similarity = chunk.similarity || 0;
+    console.log(`📊 Chunk similarity: ${similarity.toFixed(3)} for document: ${chunk.metadata?.documentId}`);
+    return similarity >= 0.7; // Only keep chunks with 70%+ similarity
+  });
+
+  console.log(`🎯 Filtered chunks: ${relevantChunks.length} out of ${chunks?.length || 0} total chunks`);
+
+  // 3. Build-Prompt using only highly relevant chunks
+  const contextText = relevantChunks.map(chunk => chunk.content).join('\n');
   const prompt = `Answer the question based only on the following context:\n\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
 
   // 4. Generate-Response
@@ -30,10 +39,10 @@ async function search(query) {
   const response = await generativeModel.generateContent(prompt);
   const answer = await response.response.text();
 
-  // 5. Extract source document metadata from chunks
+  // 5. Extract source document metadata from relevant chunks only
   // Be defensive: different RPC/DB setups may return different field names. We'll try common ones.
   const sourcesMap = new Map();
-  (chunks || []).forEach((chunk, index) => {
+  (relevantChunks || []).forEach((chunk, index) => {
     // Debug: Log what we're getting from each chunk
     console.log(`🔍 Chunk ${index}:`, {
       chunkId: chunk.id,
