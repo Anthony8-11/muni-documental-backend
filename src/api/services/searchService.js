@@ -25,7 +25,7 @@ async function search(query) {
   const prompt = `Answer the question based only on the following context:\n\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
 
   // 4. Generate-Response
-  const generativeModel = genAI.getGenerativeModel({ model: 'models/gemini-pro-latest' });
+  const generativeModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const response = await generativeModel.generateContent(prompt);
   const answer = await response.response.text();
 
