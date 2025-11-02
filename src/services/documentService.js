@@ -413,7 +413,7 @@ DocumentService.prototype.summarizeDocument = async function(documentId, userId 
     if (truncated) prompt = `Nota: el texto fue truncado por longitud. ${prompt}`;
 
     // Call Gemini generative model
-    const generativeModel = genAI.getGenerativeModel({ model: 'models/gemini-flash-latest' });
+    const generativeModel = genAI.getGenerativeModel({ model: 'models/gemini-2.5-flash' });
     const response = await generativeModel.generateContent(prompt);
     const summary = await response.response.text();
 
