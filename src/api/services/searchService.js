@@ -44,7 +44,7 @@ async function search(query) {
     
     // Prefer metadata fields if present (some pipelines store document id/name inside metadata JSON)
     const meta = chunk.metadata || (chunk.metadata === null ? null : undefined);
-    const documentId = (meta && (meta.document_id || meta.doc_id || meta.file_id)) || chunk.document_id || chunk.doc_id || chunk.document || chunk.source_id || chunk.file_id || null;
+    const documentId = (meta && (meta.documentId || meta.document_id || meta.doc_id || meta.file_id)) || chunk.document_id || chunk.doc_id || chunk.document || chunk.source_id || chunk.file_id || null;
     const name = (meta && (meta.document_name || meta.file_name || meta.filename || meta.title)) || chunk.document_name || chunk.file_name || chunk.filename || chunk.source || chunk.title || null;
     const snippet = chunk.content || chunk.text || (meta && (meta.text || meta.content)) || null;
     const page = (meta && (meta.page || meta.page_number)) || chunk.page || chunk.page_number || null;
