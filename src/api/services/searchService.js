@@ -42,13 +42,13 @@ async function search(query) {
     const page = (meta && (meta.page || meta.page_number)) || chunk.page || chunk.page_number || null;
     const url = chunk.public_url || chunk.url || chunk.file_url || (meta && meta.public_url) || null;
 
-    // Choose a key to dedupe sources; fall back to name or content slice if no id
-    const key = id || name || (snippet ? snippet.slice(0, 40) : `chunk-${Math.random().toString(36).slice(2,8)}`);
+    // Choose a key to dedupe sources; prioritize document name, then id
+    const key = name || id || (snippet ? snippet.slice(0, 40) : `chunk-${Math.random().toString(36).slice(2,8)}`);
 
     if (!sourcesMap.has(key)) {
       sourcesMap.set(key, {
         id: id || null,
-        name: name || (id ? `doc-${id}` : (snippet ? snippet.slice(0, 60) : 'unknown')),
+        name: name || 'Documento desconocido', // Changed: don't show doc-id format
         snippets: snippet ? [snippet] : [],
         page: page,
         url: url
@@ -99,9 +99,9 @@ async function search(query) {
       }
 
       if (found) {
-        // Attach canonical fields back to the source
+        // Always use the canonical document name from database
         src.id = found.id;
-        src.name = found.file_name || src.name;
+        src.name = found.file_name; // Always use DB file_name, not fallback
         src.storage_path = found.storage_path || null;
 
         // Try to obtain a public URL if possible
@@ -113,6 +113,14 @@ async function search(query) {
         } catch (e) {
           // ignore storage errors; we still return the normalized id/name
         }
+      }
+
+      // If no document found in DB, but we have a name from chunk, use it
+      if (!found && src.name && src.name !== 'Documento desconocido') {
+        // Keep the name from chunk metadata if available
+      } else if (!found) {
+        // Last fallback if no name available anywhere
+        src.name = `Documento ${src.id || 'sin identificar'}`;
       }
 
       return src;
