@@ -33,21 +33,31 @@ async function search(query) {
   // 5. Extract source document metadata from chunks
   // Be defensive: different RPC/DB setups may return different field names. We'll try common ones.
   const sourcesMap = new Map();
-  (chunks || []).forEach((chunk) => {
+  (chunks || []).forEach((chunk, index) => {
+    // Debug: Log what we're getting from each chunk
+    console.log(`🔍 Chunk ${index}:`, {
+      chunkId: chunk.id,
+      metadata: chunk.metadata,
+      document_id: chunk.document_id,
+      doc_id: chunk.doc_id
+    });
+    
     // Prefer metadata fields if present (some pipelines store document id/name inside metadata JSON)
     const meta = chunk.metadata || (chunk.metadata === null ? null : undefined);
-    const id = (meta && (meta.document_id || meta.doc_id || meta.file_id)) || chunk.document_id || chunk.doc_id || chunk.document || chunk.source_id || chunk.file_id || chunk.id || null;
+    const documentId = (meta && (meta.document_id || meta.doc_id || meta.file_id)) || chunk.document_id || chunk.doc_id || chunk.document || chunk.source_id || chunk.file_id || null;
     const name = (meta && (meta.document_name || meta.file_name || meta.filename || meta.title)) || chunk.document_name || chunk.file_name || chunk.filename || chunk.source || chunk.title || null;
     const snippet = chunk.content || chunk.text || (meta && (meta.text || meta.content)) || null;
     const page = (meta && (meta.page || meta.page_number)) || chunk.page || chunk.page_number || null;
     const url = chunk.public_url || chunk.url || chunk.file_url || (meta && meta.public_url) || null;
 
-    // Choose a key to dedupe sources; prioritize document name, then id
-    const key = name || id || (snippet ? snippet.slice(0, 40) : `chunk-${Math.random().toString(36).slice(2,8)}`);
+    console.log(`📄 Extracted - Document ID: ${documentId}, Name: ${name}`);
+
+    // Choose a key to dedupe sources; prioritize document name, then document id
+    const key = documentId || name || `chunk-${chunk.id || Math.random().toString(36).slice(2,8)}`;
 
     if (!sourcesMap.has(key)) {
       sourcesMap.set(key, {
-        id: id || null,
+        id: documentId || null, // Use the actual document ID, not chunk ID
         name: name || 'Documento desconocido', // Changed: don't show doc-id format
         snippets: snippet ? [snippet] : [],
         page: page,
@@ -67,55 +77,36 @@ async function search(query) {
     try {
       let found = null;
 
-      // Strategy 1: If source provides an id-like value, try direct lookup by id
+      // Primary strategy: Use the document ID we extracted from chunk metadata
       if (src.id) {
+        console.log(`🔍 Looking for document with ID: ${src.id}`);
         const { data: doc, error: docErr } = await supabase
           .from('documents')
           .select('id, file_name, storage_path')
           .eq('id', src.id)
           .maybeSingle();
-        if (!docErr && doc) found = doc;
-      }
-
-      // Strategy 2: Try to find document by searching in chunks table first
-      if (!found && src.id) {
-        // Look for chunks that reference this document ID
-        const { data: chunks, error: chunksErr } = await supabase
-          .from('document_chunks')
-          .select('document_id')
-          .eq('id', src.id)
-          .maybeSingle();
         
-        if (!chunksErr && chunks && chunks.document_id) {
-          // Now get the actual document
-          const { data: doc, error: docErr } = await supabase
-            .from('documents')
-            .select('id, file_name, storage_path')
-            .eq('id', chunks.document_id)
-            .maybeSingle();
-          if (!docErr && doc) found = doc;
+        if (!docErr && doc) {
+          found = doc;
+          console.log(`✅ Found document directly: ${doc.file_name}`);
+        } else {
+          console.log(`❌ Document lookup failed for ID ${src.id}:`, docErr?.message || 'No document found');
         }
       }
 
-      // Strategy 3: If not found and we have a name, try exact or partial match by file_name
+      // Fallback: If we have a name, try matching by file_name
       if (!found && src.name && src.name !== 'Documento desconocido') {
-        // Try exact match
+        console.log(`🔍 Trying name-based search for: ${src.name}`);
+        // Try exact match first
         const { data: exact, error: exactErr } = await supabase
           .from('documents')
           .select('id, file_name, storage_path')
           .eq('file_name', src.name)
           .limit(1);
-        if (!exactErr && exact && exact.length > 0) found = exact[0];
-      }
-
-      if (!found && src.name) {
-        // Try partial, case-insensitive match
-        const { data: partial, error: partialErr } = await supabase
-          .from('documents')
-          .select('id, file_name, storage_path')
-          .ilike('file_name', `%${src.name}%`)
-          .limit(1);
-        if (!partialErr && partial && partial.length > 0) found = partial[0];
+        if (!exactErr && exact && exact.length > 0) {
+          found = exact[0];
+          console.log(`✅ Found document by name: ${found.file_name}`);
+        }
       }
 
       if (found) {
