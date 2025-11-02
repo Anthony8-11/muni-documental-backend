@@ -29,8 +29,8 @@ const corsOptions = {
    origin: process.env.FRONTEND_URL || [
       'http://localhost:3000',
       'http://localhost:5000',
-      'https://muni-documental-frontend.vercel.app',
-      'https://muni-documental-frontend.netlify.app'
+      'muni-documental-backend-production.up.railway.app',
+      'https://reliable-salmiakki-557968.netlify.app/'
    ],
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
