@@ -10,28 +10,35 @@ async function search(query) {
   const embedResult = await embeddingModel.embedContent(query);
   const queryVector = embedResult.embedding.values;
 
-  // 2. Retrieve-Context with improved filtering for better relevance
+  // 2. Retrieve-Context with balanced filtering for good relevance
   const { data: chunks, error } = await supabase.rpc('match_documents', {
     query_embedding: queryVector,
-    match_threshold: 0.7, // Increased threshold for better relevance
-    match_count: 3 // Reduced count to get only most relevant chunks
+    match_threshold: 0.6, // Balanced threshold
+    match_count: 4 // Moderate count for good coverage
   });
 
   if (error) {
     throw new Error(`Error retrieving context: ${error.message}`);
   }
 
-  // Additional filtering: only keep chunks with good similarity scores
+  // Additional filtering: keep chunks with reasonable similarity scores
   const relevantChunks = (chunks || []).filter(chunk => {
     const similarity = chunk.similarity || 0;
     console.log(`📊 Chunk similarity: ${similarity.toFixed(3)} for document: ${chunk.metadata?.documentId}`);
-    return similarity >= 0.7; // Only keep chunks with 70%+ similarity
+    return similarity >= 0.55; // More permissive: 55%+ similarity
   });
 
   console.log(`🎯 Filtered chunks: ${relevantChunks.length} out of ${chunks?.length || 0} total chunks`);
 
-  // 3. Build-Prompt using only highly relevant chunks
-  const contextText = relevantChunks.map(chunk => chunk.content).join('\n');
+  // Fallback: if no chunks pass the filter, use the best available chunks
+  const finalChunks = relevantChunks.length > 0 ? relevantChunks : (chunks || []).slice(0, 2);
+  
+  if (finalChunks.length === 0) {
+    console.log('⚠️ No relevant chunks found, using fallback');
+  }
+
+  // 3. Build-Prompt using filtered chunks
+  const contextText = finalChunks.map(chunk => chunk.content).join('\n');
   const prompt = `Answer the question based only on the following context:\n\n${contextText}\n\nQuestion: ${query}\n\nAnswer:`;
 
   // 4. Generate-Response
@@ -39,10 +46,10 @@ async function search(query) {
   const response = await generativeModel.generateContent(prompt);
   const answer = await response.response.text();
 
-  // 5. Extract source document metadata from relevant chunks only
+  // 5. Extract source document metadata from final chunks
   // Be defensive: different RPC/DB setups may return different field names. We'll try common ones.
   const sourcesMap = new Map();
-  (relevantChunks || []).forEach((chunk, index) => {
+  (finalChunks || []).forEach((chunk, index) => {
     // Debug: Log what we're getting from each chunk
     console.log(`🔍 Chunk ${index}:`, {
       chunkId: chunk.id,
