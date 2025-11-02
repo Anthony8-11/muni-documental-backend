@@ -30,7 +30,10 @@ const corsOptions = {
    origin: process.env.FRONTEND_URL || [
       'http://localhost:3000',
       'http://localhost:5000',
-      'https://reliable-salmiakki-557968.netlify.app'
+      'https://muni-documental-frontend.vercel.app',
+      'https://muni-documental-frontend.netlify.app',
+      'https://reliable-salmiakki-557968.netlify.app',
+      'https://celebrated-donut-575a5b.netlify.app'
    ],
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
